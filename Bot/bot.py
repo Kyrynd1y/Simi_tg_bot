@@ -26,6 +26,7 @@ games_markup = ReplyKeyboardMarkup([['сыграем в города', 'цу-е-
 tsuefa_markup = ReplyKeyboardMarkup([data.tsuefa + part_of_game_markup])
 quit_markup = ReplyKeyboardMarkup([['/talk', '/play', '/stop']])
 talk_markup = ReplyKeyboardMarkup([['/stop_talk']])
+riddles_markup = ReplyKeyboardMarkup([['узнать ответ'] + part_of_game_markup])
 LAST_LETTER = 'last_letter'
 ANSWER = 'answer'
 COUNT_ANSWERS = 'COUNT_ANSWERS'
@@ -53,6 +54,7 @@ async def send(update, context):
 async def game_cities(update, context):
     message = update.message.text.lower().strip()
     print('game_cities')
+
     if message not in cities_lst:
         await update.message.reply_text('Я не знаю такого города')
         return 'cities'
@@ -95,15 +97,21 @@ async def tsuefa(update, context):
 
 
 def make_a_riddles():
-    return random.choice(data.riddles[riddles_level])
+    return random.choice(data.riddles[riddles_level - 1])
 
 
 async def riddles_func(update, context):
     global riddles_level
     command = update.message.text
-    if command == context.user_data[ANSWER]:
+    if command == "узнать ответ":
+        context.user_data[COUNT_ANSWERS] += 1
+        await update.message.reply_text(context.user_data[ANSWER])
+    elif command == context.user_data[ANSWER]:
         context.user_data[COUNT_ANSWERS] += 1
         await update.message.reply_text('Верно!')
+    else:
+        await update.message.reply_text('Неверно(')
+        return 'riddles'
     if context.user_data[COUNT_ANSWERS] == 3 and riddles_level != 2:
         riddles_level += 1
     riddle = make_a_riddles()
@@ -141,7 +149,7 @@ async def purgatory(update, context):
         return 'tsuefa'
     elif command == 'загадай загадку':
         await update.message.reply_text('объяснение правил игры...',
-                                        reply_markup=ReplyKeyboardMarkup([part_of_game_markup]))
+                                        reply_markup=riddles_markup)
         riddle = make_a_riddles()
         await update.message.reply_text(riddle['riddle'])
         context.user_data[ANSWER] = riddle['answer']
