@@ -1,3 +1,4 @@
+import sqlite3
 riddles = {
     1: [{'riddle': '''Где есть реки, но нет воды,
 есть города, но нет зданий,
@@ -50,9 +51,16 @@ riddles = {
         {'riddle': '''По чему можно ходить, бегать, ползать,
          но практически невозможно ездить?''', 'answer': 'по лестнице'}]
 }
-
+riddless = {}
 
 tsuefa = ['камень', 'ножницы', 'бумага']
 
-with open('../data/sam_bot.txt', encoding='utf-8') as cit_txt:
+cur = sqlite3.connect("../data/riddles.sql").cursor()
+
+result = cur.execute("SELECT riddle, answer FROM [1];").fetchall()
+
+for i in result:
+    riddless['riddles'] = i[1]
+
+with open('../data/sam_bot(1).txt', encoding='utf-8') as cit_txt:
     cities_lst = cit_txt.read().lower().split()
