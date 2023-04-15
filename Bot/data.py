@@ -3,12 +3,13 @@ riddles = []
 
 tsuefa = ['камень', 'ножницы', 'бумага']
 
-cur = sqlite3.connect("../data/riddles.sql").cursor()
+cur = sqlite3.connect("../data/riddles.db").cursor()
 
 
 for i in range(1, 3):
     riddles.append([])
     result = cur.execute(f"SELECT riddle, answer FROM [{i}];").fetchall()
+    print(result)
     for j in result:
         riddles[i - 1].append({'riddle': j[0], 'answer': j[1]})
 

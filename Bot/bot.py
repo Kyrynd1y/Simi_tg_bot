@@ -1,5 +1,6 @@
 import logging
 import random
+import sqlite3
 import time
 
 import openai
@@ -24,9 +25,10 @@ cities_lst = []
 part_of_game_markup = ['/stop_play']
 games_markup = ReplyKeyboardMarkup([['сыграем в города', 'цу-е-фа', 'загадай загадку'] + part_of_game_markup])
 tsuefa_markup = ReplyKeyboardMarkup([data.tsuefa + part_of_game_markup])
-quit_markup = ReplyKeyboardMarkup([['/talk', '/play', '/stop']])
+quit_markup = ReplyKeyboardMarkup([['/talk', '/play', '/images', '/stop']])
 talk_markup = ReplyKeyboardMarkup([['/stop_talk']])
 riddles_markup = ReplyKeyboardMarkup([['узнать ответ'] + part_of_game_markup])
+images_purgat_markup = ReplyKeyboardMarkup([['/bot', '/top_images']])
 LAST_LETTER = 'last_letter'
 ANSWER = 'answer'
 COUNT_ANSWERS = 'COUNT_ANSWERS'
@@ -94,6 +96,32 @@ async def tsuefa(update, context):
     context.user_data['tsuefa'] = bot_tsuefa
     await update.message.reply_text(bot_tsuefa)
     return 'tsuefa'
+
+
+async def images(update, context):
+    await update.message.reply_text('откуда вы хотите получить изображение?', reply_markup=images_purgat_markup)
+
+
+async def generate_images(update, context):
+    await update.message.reply_text('еще в разработке...')
+    # так же надо будет объяснить, как писать команды про топы и поиск по ключам
+
+
+async def db_images(update, context):
+    await update.message.reply_text('по какому принципу вы хотите получить изображения?')
+    return 'sorting'
+
+
+async def images_sort_message(update, context):
+    command = update.message.text
+    if 'топ' in command:
+        pass
+    if command == '':
+        pass
+
+
+def top_images(command):
+    pass
 
 
 def make_a_riddles():
@@ -193,6 +221,7 @@ def main():
 
         fallbacks=[CommandHandler('stop_play', start)]
     )
+
     conv_handler_talker = ConversationHandler(
 
         entry_points=[CommandHandler('talk', talking)],
@@ -203,6 +232,19 @@ def main():
 
         fallbacks=[CommandHandler('stop_talk', start)]
     )
+
+    conv_handler_top_images = ConversationHandler(
+
+        entry_points=[CommandHandler('top_images', db_images)],
+
+        states={
+            'sorting': [MessageHandler(filters.TEXT & ~filters.COMMAND, images_sort_message)]
+        },
+
+        fallbacks=[CommandHandler('exit', start)]
+    )
+    application.add_handler(CommandHandler('images', images))
+    application.add_handler(CommandHandler('bot', generate_images))
     application.add_handler(CommandHandler('start', start))
     application.add_handler(CommandHandler('stop', stop))
     application.add_handler(conv_handler_player)
