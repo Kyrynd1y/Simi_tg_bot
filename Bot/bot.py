@@ -1,26 +1,19 @@
-import logging
 import random
 import time
 
 import openai
-from aiogram import Bot, types
+from aiogram import Bot
 from aiogram.dispatcher import Dispatcher
-from aiogram.utils import executor
 
 from telegram import ReplyKeyboardMarkup
 from telegram.ext import Application, MessageHandler, filters, CommandHandler, ConversationHandler
 import data
 
-BOT_TOKEN = '5696148795:AAHWPX9GKwZjfNKkOgoGEBMckqn2tQcgjDQ'
-openai.api_key = "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"
-
-# logging.basicConfig(
-#     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.DEBUG
-# )
-#
-# logger = logging.getLogger(__name__)
+BOT_TOKEN = '6217430570:AAE2I1NZYFIUjzYFCXZtYyTHi31rSR79RDE'
+openai.api_key = "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"
 
 cities_lst = []
+used_cities_list = []
 part_of_game_markup = ['/stop_play']
 games_markup = ReplyKeyboardMarkup([['сыграем в города', 'цу-е-фа', 'загадай загадку'] + part_of_game_markup])
 tsuefa_markup = ReplyKeyboardMarkup([data.tsuefa + part_of_game_markup])
@@ -55,20 +48,26 @@ async def game_cities(update, context):
     message = update.message.text.lower().strip()
     print('game_cities')
 
-    if message not in cities_lst:
-        await update.message.reply_text('Я не знаю такого города')
+    if message[0] != context.user_data[LAST_LETTER]:
+        await update.message.reply_text('Первая буква вашего города не совпадает с последней буквой моего города!')
         return 'cities'
-    elif message[0] != context.user_data[LAST_LETTER]:
-        await update.message.reply_text('Первая буква вашего города не совпадает с последней буквой моего города')
+    elif message in used_cities_list:
+        await update.message.reply_text('Этот город уже был назван!')
+        return 'cities'
+    elif message not in cities_lst:
+        await update.message.reply_text('Я не знаю такого города!')
         return 'cities'
     context.user_data[LAST_LETTER] = message[-1]
     cities_lst.remove(message)
+    used_cities_list.append(message)
     chosen_city = random.choice(cities_lst)
     while chosen_city[0] != context.user_data[LAST_LETTER]:
         chosen_city = random.choice(cities_lst)
+    used_cities_list.append(chosen_city)
     cities_lst.remove(chosen_city)
     context.user_data[LAST_LETTER] = chosen_city[-1]
-    await update.message.reply_text(chosen_city)
+    chosen_city[0].upper()
+    await update.message.reply_text(chosen_city.capitalize())
     return 'cities'
 
 
@@ -102,7 +101,7 @@ def make_a_riddles():
 
 async def riddles_func(update, context):
     global riddles_level
-    command = update.message.text
+    command = update.message.text.lower()
     if command == "узнать ответ":
         context.user_data[COUNT_ANSWERS] += 1
         await update.message.reply_text(context.user_data[ANSWER])
@@ -125,17 +124,18 @@ async def purgatory(update, context):
     command = update.message.text.lower()
     print(command)
     if command == 'сыграем в города':
-        await update.message.reply_text('объяснение правил игры...',
+        await update.message.reply_text(data.cities_rules,
                                         reply_markup=ReplyKeyboardMarkup([part_of_game_markup]))
         cities_lst = data.cities_lst.copy()
         await update.message.reply_text("я начну")
         chosen_city = random.choice(cities_lst)
+        used_cities_list.append(chosen_city)
         cities_lst.remove(chosen_city)
         context.user_data[LAST_LETTER] = chosen_city[-1]
-        await update.message.reply_text(chosen_city)
+        await update.message.reply_text(chosen_city.capitalize())
         return 'cities'
     elif command == 'цу-е-фа':
-        await update.message.reply_text('объяснение правил игры...',
+        await update.message.reply_text(data.tsuefa_rules,
                                         reply_markup=tsuefa_markup)
         time.sleep(5)
         await update.message.reply_text('цу')
@@ -148,7 +148,7 @@ async def purgatory(update, context):
         await update.message.reply_text(bot_choise)
         return 'tsuefa'
     elif command == 'загадай загадку':
-        await update.message.reply_text('объяснение правил игры...',
+        await update.message.reply_text(data.qst_rules,
                                         reply_markup=riddles_markup)
         riddle = make_a_riddles()
         await update.message.reply_text(riddle['riddle'])
