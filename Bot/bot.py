@@ -3,15 +3,14 @@ import sqlite3
 import time
 
 import openai
-from aiogram import Bot
-from aiogram.dispatcher import Dispatcher
+import telegram
 
-from telegram import ReplyKeyboardMarkup
+from telegram import ReplyKeyboardMarkup, Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import Application, MessageHandler, filters, CommandHandler, ConversationHandler
 import data
 from db_session import *
 
-BOT_TOKEN = '6217430570:AAE2I1NZYFIUjzYFCXZtYyTHi31rSR79RDE'
+BOT_TOKEN = '5696148795:AAHWPX9GKwZjfNKkOgoGEBMckqn2tQcgjDQ'
 openai.api_key = "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"
 
 cities_lst = []
@@ -32,8 +31,7 @@ count_correct_answer = 0
 global_init("../data/riddles.db")
 db_sess = create_session()
 
-bot = Bot(token=BOT_TOKEN)
-dp = Dispatcher(bot)
+bot = telegram.Bot(BOT_TOKEN)
 
 
 async def send(update, context):
@@ -115,18 +113,23 @@ async def db_images(update, context):
     return 'sorting'
 
 
-async def images_sort_message(update, context):
+async def images_sort_message(update: Update, context):
     command = update.message.text
     if 'топ' in command:
-        count_top = command[command.find('топ') + 4:]
-        top_images(count_top)
+        await top_images(update)
     if command == '':
         pass
 
 
-def top_images(command):
-    rating = db_sess.query(Image)
-    print("rating", rating[0])
+async def top_images(update: Update):
+    command = update.message.text
+    count_top = int(command[command.find('топ') + 3:].strip())
+    db_sess.query(Image).order_by(Image.rating)
+    selected_images = db_sess.query(Image)
+    keyboard = InlineKeyboardMarkup([[InlineKeyboardButton('Наш сайт', callback_data='')]])
+    for i in range(count_top):
+        link = db_sess.query(Image.link)[i][0]
+        await bot.send_photo(update.message.chat.id, photo=open(link, 'rb'), reply_markup=keyboard)
 
 
 def make_a_riddles():

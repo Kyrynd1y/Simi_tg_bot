@@ -44,10 +44,11 @@ def create_session() -> Session:
 def main():
     global_init("../data/riddles.db")
     session = create_session()
-    image = Image(key_word='дота', link='/data/images...', rating='100')
+    image = Image(key_word='дота', link='../data/images/deathgun.png', rating='100')
+    session.add(image)
+    image = Image(key_word='дота', link='../data/images/deathgun.png', rating='50')
     session.add(image)
     session.commit()
-    session.close()
 
 
 if __name__ == '__main__':
