@@ -9,6 +9,7 @@ from aiogram.dispatcher import Dispatcher
 from telegram import ReplyKeyboardMarkup
 from telegram.ext import Application, MessageHandler, filters, CommandHandler, ConversationHandler
 import data
+from db_session import *
 
 BOT_TOKEN = '6217430570:AAE2I1NZYFIUjzYFCXZtYyTHi31rSR79RDE'
 openai.api_key = "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"
@@ -27,6 +28,9 @@ ANSWER = 'answer'
 COUNT_ANSWERS = 'COUNT_ANSWERS'
 riddles_level = 1
 count_correct_answer = 0
+
+global_init("../data/riddles.db")
+db_sess = create_session()
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(bot)
@@ -114,13 +118,15 @@ async def db_images(update, context):
 async def images_sort_message(update, context):
     command = update.message.text
     if 'топ' in command:
-        pass
+        count_top = command[command.find('топ') + 4:]
+        top_images(count_top)
     if command == '':
         pass
 
 
 def top_images(command):
-    pass
+    rating = db_sess.query(Image)
+    print("rating", rating[0])
 
 
 def make_a_riddles():
@@ -249,6 +255,7 @@ def main():
     application.add_handler(CommandHandler('stop', stop))
     application.add_handler(conv_handler_player)
     application.add_handler(conv_handler_talker)
+    application.add_handler(conv_handler_top_images)
     application.run_polling()
 
 

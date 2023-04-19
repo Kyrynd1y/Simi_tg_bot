@@ -30,6 +30,7 @@ def global_init(db_file):
     print(f"Подключение к базе данных по адресу {conn_str}")
 
     engine = sqlalchemy.create_engine(conn_str, echo=False)
+    print(engine)
     __factory = orm.sessionmaker(bind=engine)
 
     SqlAlchemyBase.metadata.create_all(engine)
@@ -46,6 +47,7 @@ def main():
     image = Image(key_word='дота', link='/data/images...', rating='100')
     session.add(image)
     session.commit()
+    session.close()
 
 
 if __name__ == '__main__':
