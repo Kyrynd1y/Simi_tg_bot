@@ -10,14 +10,12 @@ import dotenv
 import os
 import replicate
 
-from PIL import Image
-
 from telegram import ReplyKeyboardMarkup, Update, InlineKeyboardMarkup, InlineKeyboardButton
-from telegram.ext import Application, MessageHandler, filters, CommandHandler, ConversationHandler
+from telegram.ext import Application, MessageHandler, filters, CommandHandler, ConversationHandler, CallbackQueryHandler
 import data
 from db_session import *
 
-BOT_TOKEN = '6217430570:AAE2I1NZYFIUjzYFCXZtYyTHi31rSR79RDE'
+BOT_TOKEN = '5696148795:AAHWPX9GKwZjfNKkOgoGEBMckqn2tQcgjDQ'
 openai.api_key = "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"
 
 dotenv.load_dotenv()
@@ -31,10 +29,17 @@ tsuefa_markup = ReplyKeyboardMarkup([data.tsuefa + part_of_game_markup])
 quit_markup = ReplyKeyboardMarkup([['/talk', '/play', '/images', '/stop']])
 talk_markup = ReplyKeyboardMarkup([['/stop_talk']])
 riddles_markup = ReplyKeyboardMarkup([['узнать ответ'] + part_of_game_markup])
-images_purgat_markup = ReplyKeyboardMarkup([['/bot', '/top_images', '/exit']])
+images_purgat_markup = ReplyKeyboardMarkup([['/bot', '/top_images']])
+scrolling_images_markup = InlineKeyboardMarkup([[InlineKeyboardButton('👍', callback_data='like'),
+                                                 InlineKeyboardButton('download', callback_data='download'),
+                                                 InlineKeyboardButton('👎', callback_data='dislike')], [
+                                                    InlineKeyboardButton('◀', callback_data='back'),
+                                                    InlineKeyboardButton('...', callback_data='...'),
+                                                    InlineKeyboardButton('▶', callback_data='forward')]])
 LAST_LETTER = 'last_letter'
 ANSWER = 'answer'
 COUNT_ANSWERS = 'COUNT_ANSWERS'
+NUMBER_LINK = 'NUMBER_LINK'
 riddles_level = 1
 count_correct_answer = 0
 
@@ -131,26 +136,33 @@ async def return_images(update, context):
 
 async def db_images(update, context):
     await update.message.reply_text('по какому принципу вы хотите получить изображения?')
+    context.user_data[NUMBER_LINK] = 1
     return 'sorting'
 
 
 async def images_sort_message(update: Update, context):
     command = update.message.text
     if 'топ' in command:
-        await top_images(update)
+        links = top_images(update)
     if command == '':
         pass
+    await bot.send_photo(update.message.chat.id, photo=open(links[context.user_data[NUMBER_LINK] - 1], 'rb'),
+                         reply_markup=scrolling_images_markup)
+    return 'sorting'
 
 
-async def top_images(update: Update):
+def top_images(update: Update):
     command = update.message.text
+    links = []
     count_top = int(command[command.find('топ') + 3:].strip())
     db_sess.query(Image).order_by(Image.rating)
-    selected_images = db_sess.query(Image)
-    keyboard = InlineKeyboardMarkup([[InlineKeyboardButton('Наш сайт', callback_data='')]])
     for i in range(count_top):
-        link = db_sess.query(Image.link)[i][0]
-        await bot.send_photo(update.message.chat.id, photo=open(link, 'rb'), reply_markup=keyboard)
+        links.append(db_sess.query(Image.link)[i][0])
+    return links
+
+
+async def next_image(update, context):
+    await update.message
 
 
 def make_a_riddles():
@@ -279,6 +291,7 @@ def main():
 
         states={
             'generate': [MessageHandler(filters.TEXT & ~filters.COMMAND, return_images)]
+
         },
 
         fallbacks=[CommandHandler('exit', start)]

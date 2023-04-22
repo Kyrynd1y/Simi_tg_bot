@@ -1,13 +1,5 @@
-import dotenv
-import os
-import replicate
+import requests
 
-dotenv.load_dotenv()
-REPLICATE_API_TOKEN = os.getenv('REPLICATE_API_TOKEN')
-
-
-output = replicate.run(
-    "ai-forever/kandinsky-2:601eea49d49003e6ea75a11527209c4f510a93e2112c969d548fbb45b9c4f19f",
-    input={"prompt": f"{input()}, 4k photo"}
-)
-print(output)
+img_data = requests.get('http://site.meishij.net/r/58/25/3568808/a3568808_142682562777944.jpg').content
+with open('image_name.jpg', 'wb') as handler:
+    handler.write(img_data)

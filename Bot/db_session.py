@@ -46,7 +46,11 @@ def main():
     session = create_session()
     image = Image(key_word='дота', link='../data/images/deathgun.png', rating='100')
     session.add(image)
-    image = Image(key_word='дота', link='../data/images/deathgun.png', rating='50')
+    image = Image(key_word='1', link='../data/images/1.png', rating='1')
+    session.add(image)
+    image = Image(key_word='2', link='../data/images/2.png', rating='2')
+    session.add(image)
+    image = Image(key_word='3', link='../data/images/3.png', rating='3')
     session.add(image)
     session.commit()
 
