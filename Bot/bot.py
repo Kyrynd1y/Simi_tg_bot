@@ -3,15 +3,25 @@ import sqlite3
 import time
 
 import openai
+import requests
 import telegram
+
+import dotenv
+import os
+import replicate
+
+from PIL import Image
 
 from telegram import ReplyKeyboardMarkup, Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import Application, MessageHandler, filters, CommandHandler, ConversationHandler
 import data
 from db_session import *
 
-BOT_TOKEN = '5696148795:AAHWPX9GKwZjfNKkOgoGEBMckqn2tQcgjDQ'
+BOT_TOKEN = '6217430570:AAE2I1NZYFIUjzYFCXZtYyTHi31rSR79RDE'
 openai.api_key = "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"
+
+dotenv.load_dotenv()
+REPLICATE_API_TOKEN = os.getenv('REPLICATE_API_TOKEN')
 
 cities_lst = []
 used_cities_list = []
@@ -21,7 +31,7 @@ tsuefa_markup = ReplyKeyboardMarkup([data.tsuefa + part_of_game_markup])
 quit_markup = ReplyKeyboardMarkup([['/talk', '/play', '/images', '/stop']])
 talk_markup = ReplyKeyboardMarkup([['/stop_talk']])
 riddles_markup = ReplyKeyboardMarkup([['узнать ответ'] + part_of_game_markup])
-images_purgat_markup = ReplyKeyboardMarkup([['/bot', '/top_images']])
+images_purgat_markup = ReplyKeyboardMarkup([['/bot', '/top_images', '/exit']])
 LAST_LETTER = 'last_letter'
 ANSWER = 'answer'
 COUNT_ANSWERS = 'COUNT_ANSWERS'
@@ -104,8 +114,19 @@ async def images(update, context):
 
 
 async def generate_images(update, context):
-    await update.message.reply_text('еще в разработке...')
-    # так же надо будет объяснить, как писать команды про топы и поиск по ключам
+    await update.message.reply_text('Что хотите видеть на картинке? Введите точный запрос на английском языке')
+    return 'generate'
+
+
+async def return_images(update, context):
+    command = update.message.text
+    print(command)
+    output = replicate.run(
+        "ai-forever/kandinsky-2:601eea49d49003e6ea75a11527209c4f510a93e2112c969d548fbb45b9c4f19f",
+        input={"prompt": f"{command}, 4k photo"}
+    )
+    await update.message.reply_text(*output)
+    return 'generate'
 
 
 async def db_images(update, context):
@@ -252,10 +273,20 @@ def main():
 
         fallbacks=[CommandHandler('exit', start)]
     )
+    conv_generate_images = ConversationHandler(
+
+        entry_points=[CommandHandler('bot', generate_images)],
+
+        states={
+            'generate': [MessageHandler(filters.TEXT & ~filters.COMMAND, return_images)]
+        },
+
+        fallbacks=[CommandHandler('exit', start)]
+    )
     application.add_handler(CommandHandler('images', images))
-    application.add_handler(CommandHandler('bot', generate_images))
     application.add_handler(CommandHandler('start', start))
     application.add_handler(CommandHandler('stop', stop))
+    application.add_handler(conv_generate_images)
     application.add_handler(conv_handler_player)
     application.add_handler(conv_handler_talker)
     application.add_handler(conv_handler_top_images)
