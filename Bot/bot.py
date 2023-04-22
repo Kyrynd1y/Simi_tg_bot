@@ -15,7 +15,7 @@ from telegram.ext import Application, MessageHandler, filters, CommandHandler, C
 import data
 from db_session import *
 
-BOT_TOKEN = '5696148795:AAHWPX9GKwZjfNKkOgoGEBMckqn2tQcgjDQ'
+BOT_TOKEN = '6217430570:AAE2I1NZYFIUjzYFCXZtYyTHi31rSR79RDE'
 openai.api_key = "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"
 
 dotenv.load_dotenv()
@@ -125,12 +125,17 @@ async def generate_images(update, context):
 
 async def return_images(update, context):
     command = update.message.text
+    await update.message.reply_text('Рисую картинку! Это не займет много времени')
     print(command)
     output = replicate.run(
         "ai-forever/kandinsky-2:601eea49d49003e6ea75a11527209c4f510a93e2112c969d548fbb45b9c4f19f",
         input={"prompt": f"{command}, 4k photo"}
     )
-    await update.message.reply_text(*output)
+    img_data = requests.get(*output).content
+    with open('image_name.jpg', 'wb') as handler:
+        handler.write(img_data)
+    await bot.send_photo(update.message.chat.id, photo=img_data)
+    await update.message.reply_text('Готово! Нарисовать еще что-нибудь?')
     return 'generate'
 
 
