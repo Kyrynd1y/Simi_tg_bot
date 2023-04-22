@@ -16,7 +16,7 @@ import data
 from db_session import *
 
 BOT_TOKEN = '6217430570:AAE2I1NZYFIUjzYFCXZtYyTHi31rSR79RDE'
-openai.api_key = "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"
+openai.api_key = "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"
 
 dotenv.load_dotenv()
 REPLICATE_API_TOKEN = os.getenv('REPLICATE_API_TOKEN')
@@ -80,7 +80,10 @@ async def game_cities(update, context):
     elif message not in cities_lst:
         await update.message.reply_text('Я не знаю такого города!')
         return 'cities'
-    context.user_data[LAST_LETTER] = message[-1]
+    if message[-1] not in ['ь', 'ъ']:
+        context.user_data[LAST_LETTER] = message[-1]
+    else:
+        context.user_data[LAST_LETTER] = message[-2]
     cities_lst.remove(message)
     used_cities_list.append(message)
     chosen_city = random.choice(cities_lst)
@@ -88,7 +91,10 @@ async def game_cities(update, context):
         chosen_city = random.choice(cities_lst)
     used_cities_list.append(chosen_city)
     cities_lst.remove(chosen_city)
-    context.user_data[LAST_LETTER] = chosen_city[-1]
+    if chosen_city[-1] not in ['ь', 'ъ']:
+        context.user_data[LAST_LETTER] = chosen_city[-1]
+    else:
+        context.user_data[LAST_LETTER] = message[-2]
     chosen_city[0].upper()
     await update.message.reply_text(chosen_city.capitalize())
     return 'cities'
@@ -166,7 +172,7 @@ async def images_sort_message(update: Update, context):
 
 async def scrolling_images(update: Update, context):
     query = update.callback_query
-    print('query', query, '           ',type(query))
+    print('query', query, '           ', type(query))
     if query == '👍':
         db_sess.query(Image).filter(Image.link.id == context.user_data[NUMBER_LINK]).first().raiting += 1
         db_sess.flush()
