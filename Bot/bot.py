@@ -40,6 +40,10 @@ LAST_LETTER = 'last_letter'
 ANSWER = 'answer'
 COUNT_ANSWERS = 'COUNT_ANSWERS'
 NUMBER_LINK = 'NUMBER_LINK'
+MAX_COUNT_LINK = 'MAX_COUNT_LINK'
+USER_ID = 'USER_ID'
+MESSAGE_ID = 'MESSAGE_ID'
+LINKS = 'LINKS'
 riddles_level = 1
 count_correct_answer = 0
 
@@ -132,7 +136,7 @@ async def return_images(update, context):
         input={"prompt": f"{command}, 4k photo"}
     )
     img_data = requests.get(*output).content
-    with open('image_name.jpg', 'wb') as handler:
+    with open(f'../data/images/{command.split()[0]}.jpg', 'wb') as handler:
         handler.write(img_data)
     await bot.send_photo(update.message.chat.id, photo=img_data)
     await update.message.reply_text('Готово! Нарисовать еще что-нибудь?')
@@ -148,21 +152,44 @@ async def db_images(update, context):
 async def images_sort_message(update: Update, context):
     command = update.message.text
     if 'топ' in command:
-        links = top_images(update)
+        count_top = int(command[command.find('топ') + 3:].strip())
+        context.user_data[MAX_COUNT_LINK] = count_top
+        links = top_images(count_top)
+        context.user_data[LINKS] = links
     if command == '':
         pass
     await bot.send_photo(update.message.chat.id, photo=open(links[context.user_data[NUMBER_LINK] - 1], 'rb'),
                          reply_markup=scrolling_images_markup)
-    return 'sorting'
+    context.user_data[MESSAGE_ID] = update.inline_query
+    return 'scrolling'
 
 
-def top_images(update: Update):
-    command = update.message.text
+async def scrolling_images(update: Update, context):
+    query = update.callback_query
+    print('query', query, '           ',type(query))
+    if query == '👍':
+        db_sess.query(Image).filter(Image.link.id == context.user_data[NUMBER_LINK]).first().raiting += 1
+        db_sess.flush()
+        db_sess.commit()
+    elif query == '👎':
+        pass
+    elif query == '◀' and context.user_data[NUMBER_LINK] != 1:
+        context.user_data[NUMBER_LINK] -= 1
+    elif query == '▶' and context.user_data[NUMBER_LINK] != context.user_data[MAX_COUNT_LINK]:
+        context.user_data[NUMBER_LINK] += 1
+    link = context.user_data[LINKS][context.user_data[NUMBER_LINK]]
+    media = telegram.InputMedia(media=link, media_type='photo')
+    print(media)
+    await query.message.edit_media(media, reply_markup=scrolling_images_markup)
+
+
+def top_images(count_top):
     links = []
-    count_top = int(command[command.find('топ') + 3:].strip())
     db_sess.query(Image).order_by(Image.rating)
     for i in range(count_top):
         links.append(db_sess.query(Image.link)[i][0])
+    db_sess.flush()
+    db_sess.commit()
     return links
 
 
@@ -249,6 +276,7 @@ async def talking(update, context):
 
 async def start(update, context):
     await update.message.reply_text('чем займемся?', reply_markup=quit_markup)
+    context.user_data[USER_ID] = update.message.chat_id
     return ConversationHandler.END
 
 
@@ -279,17 +307,25 @@ def main():
 
         fallbacks=[CommandHandler('stop_talk', start)]
     )
-
+    conv_handler = ConversationHandler(
+        entry_points=[CommandHandler('start', start)],
+        states={
+            'FIRST': [CallbackQueryHandler(scrolling_images)]
+        },
+        fallbacks=[CommandHandler('start', start)]
+    )
     conv_handler_top_images = ConversationHandler(
 
         entry_points=[CommandHandler('top_images', db_images)],
 
         states={
-            'sorting': [MessageHandler(filters.TEXT & ~filters.COMMAND, images_sort_message)]
+            'sorting': [MessageHandler(filters.TEXT & ~filters.COMMAND, images_sort_message)],
+            'scrolling': [CallbackQueryHandler(scrolling_images)]
         },
 
         fallbacks=[CommandHandler('exit', start)]
     )
+
     conv_generate_images = ConversationHandler(
 
         entry_points=[CommandHandler('bot', generate_images)],

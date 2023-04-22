@@ -46,7 +46,7 @@ def main():
     session = create_session()
     image = Image(key_word='дота', link='../data/images/deathgun.png', rating='100')
     session.add(image)
-    image = Image(key_word='1', link='../data/images/1.png', rating='1')
+    image = Image(key_word='1', link='https://i.pinimg.com/originals/42/67/3e/42673e608003f60330c9cb36c1f7ff90.jpg', rating='90')
     session.add(image)
     image = Image(key_word='2', link='../data/images/2.png', rating='2')
     session.add(image)
