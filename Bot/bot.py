@@ -15,27 +15,29 @@ from telegram.ext import Application, MessageHandler, filters, CommandHandler, C
 import data
 from db_session import *
 
-BOT_TOKEN = '6217430570:AAE2I1NZYFIUjzYFCXZtYyTHi31rSR79RDE'
 openai.api_key = "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"
 
 dotenv.load_dotenv()
-REPLICATE_API_TOKEN = os.getenv('REPLICATE_API_TOKEN')
+BOT_TOKEN = os.getenv('REPLICATE_API_TOKEN')
 
 cities_lst = []
 used_cities_list = []
 part_of_game_markup = ['/stop_play']
+exit = ['/exit']
 games_markup = ReplyKeyboardMarkup([['сыграем в города', 'цу-е-фа', 'загадай загадку'] + part_of_game_markup])
 tsuefa_markup = ReplyKeyboardMarkup([data.tsuefa + part_of_game_markup])
 quit_markup = ReplyKeyboardMarkup([['/talk', '/play', '/images', '/stop']])
 talk_markup = ReplyKeyboardMarkup([['/stop_talk']])
 riddles_markup = ReplyKeyboardMarkup([['узнать ответ'] + part_of_game_markup])
-images_purgat_markup = ReplyKeyboardMarkup([['/bot', '/top_images']])
+images_purgat_markup = ReplyKeyboardMarkup([['сгенерировать', 'топ картинок'] + exit])
 scrolling_images_markup = InlineKeyboardMarkup([[InlineKeyboardButton('👍', callback_data='like'),
                                                  InlineKeyboardButton('download', callback_data='download'),
                                                  InlineKeyboardButton('👎', callback_data='dislike')], [
                                                     InlineKeyboardButton('◀', callback_data='back'),
                                                     InlineKeyboardButton('...', callback_data='...'),
                                                     InlineKeyboardButton('▶', callback_data='forward')]])
+top_images_markup = ReplyKeyboardMarkup([["топ 2", "топ 3", "рандомно"] + exit])
+
 LAST_LETTER = 'last_letter'
 ANSWER = 'answer'
 COUNT_ANSWERS = 'COUNT_ANSWERS'
@@ -120,45 +122,66 @@ async def tsuefa(update, context):
 
 async def images(update, context):
     await update.message.reply_text('откуда вы хотите получить изображение?', reply_markup=images_purgat_markup)
-
-
-async def generate_images(update, context):
-    await update.message.reply_text('Что хотите видеть на картинке? Введите точный запрос на английском языке')
-    return 'generate'
+    return 'purgat'
 
 
 async def return_images(update, context):
     command = update.message.text
+    if command == 'топ картинок':
+        await purgatory_images(update, context)
+        return 'sorting'
     await update.message.reply_text('Рисую картинку! Это не займет много времени')
     print(command)
     output = replicate.run(
-        "ai-forever/kandinsky-2:601eea49d49003e6ea75a11527209c4f510a93e2112c969d548fbb45b9c4f19f",
+        "ai-forever/kandinsky-2:r8_1OWomDah0wmzZ1L2stFh6UZhuS4uYhP2i4ZZ5",
         input={"prompt": f"{command}, 4k photo"}
     )
     img_data = requests.get(*output).content
-    with open(f'../data/images/{command.split()[0]}.jpg', 'wb') as handler:
+    link = f'../data/images/{"_".join(command.split())}.jpg'
+    image = Image(key_word=f'{command.split()[0]}', link=link, rating=0)
+    db_sess.add(image)
+    db_sess.commit()
+    with open(link, 'wb') as handler:
         handler.write(img_data)
     await bot.send_photo(update.message.chat.id, photo=img_data)
     await update.message.reply_text('Готово! Нарисовать еще что-нибудь?')
     return 'generate'
 
 
-async def db_images(update, context):
-    await update.message.reply_text('по какому принципу вы хотите получить изображения?')
-    context.user_data[NUMBER_LINK] = 1
-    return 'sorting'
+async def purgatory_images(update, context):
+    if update.message.text == 'топ картинок':
+        await update.message.reply_text('по какому принципу вы хотите получить изображения?', reply_markup=top_images_markup)
+        context.user_data[NUMBER_LINK] = 0
+        return 'sorting'
+    elif update.message.text == 'сгенерировать':
+        await update.message.reply_text('Что хотите видеть на картинке? Введите точный запрос на английском языке')
+        return 'generate'
+    else:
+        await update.message.reply_text('Я не знаю такую команду')
+        return 'purgat'
 
 
 async def images_sort_message(update: Update, context):
     command = update.message.text
+    print(command, 'топ' in command)
+    if command == 'сгенерировать':
+        await purgatory_images(update, context)
+        return 'generate'
+        # работает не правильно
     if 'топ' in command:
         count_top = int(command[command.find('топ') + 3:].strip())
-        context.user_data[MAX_COUNT_LINK] = count_top
-        links = top_images(count_top)
+        context.user_data[MAX_COUNT_LINK] = count_top - 1
+        links = get_links(count_top)
         context.user_data[LINKS] = links
-    if command == '':
-        pass
-    await bot.send_photo(update.message.chat.id, photo=open(links[context.user_data[NUMBER_LINK] - 1], 'rb'),
+    elif command == 'рандомно':
+        context.user_data[MAX_COUNT_LINK] = 0
+        links = get_links(command)
+        print('links', links)
+        context.user_data[LINKS] = links
+    else:
+        await update.message.reply_text('Я не знаю такую команду')
+        return 'sorting'
+    await bot.send_photo(update.message.chat.id, photo=open(links[context.user_data[NUMBER_LINK]], 'rb'),
                          reply_markup=scrolling_images_markup)
     context.user_data[MESSAGE_ID] = update.inline_query
     return 'scrolling'
@@ -166,30 +189,38 @@ async def images_sort_message(update: Update, context):
 
 async def scrolling_images(update: Update, context):
     query = update.callback_query
-    print('query', query, '           ',type(query))
-    if query == '👍':
-        db_sess.query(Image).filter(Image.link.id == context.user_data[NUMBER_LINK]).first().raiting += 1
-        db_sess.flush()
+    print('query', query)
+    if update.message.text == 'сгенерировать':
+        await purgatory_images(update, context)
+        return 'generate'
+    if query.data == 'like':
+        db_sess.query(Image).filter(Image.id == str(context.user_data[NUMBER_LINK] + 1)).first().rating += 1
         db_sess.commit()
-    elif query == '👎':
-        pass
-    elif query == '◀' and context.user_data[NUMBER_LINK] != 1:
+    elif query.data == 'dislike':
+        db_sess.query(Image).filter(Image.id == str(context.user_data[NUMBER_LINK] + 1)).first().rating -= 1
+        db_sess.commit()
+    elif query.data == 'back' and context.user_data[NUMBER_LINK] != 0:
         context.user_data[NUMBER_LINK] -= 1
-    elif query == '▶' and context.user_data[NUMBER_LINK] != context.user_data[MAX_COUNT_LINK]:
+    elif query.data == 'forward' and context.user_data[NUMBER_LINK] != context.user_data[MAX_COUNT_LINK]:
         context.user_data[NUMBER_LINK] += 1
     link = context.user_data[LINKS][context.user_data[NUMBER_LINK]]
-    media = telegram.InputMedia(media=link, media_type='photo')
-    print(media)
-    await query.message.edit_media(media, reply_markup=scrolling_images_markup)
+    media = telegram.InputMediaPhoto(media=open(link, 'rb'))
+    await query.message.edit_media(media=media, reply_markup=scrolling_images_markup)
 
 
-def top_images(count_top):
+def get_links(command):
     links = []
     db_sess.query(Image).order_by(Image.rating)
-    for i in range(count_top):
-        links.append(db_sess.query(Image.link)[i][0])
-    db_sess.flush()
-    db_sess.commit()
+    if type(command) == int:
+        for i in range(command):
+            links.append(db_sess.query(Image.link)[i][0])
+        db_sess.flush()
+        db_sess.commit()
+    if command == 'рандомно':
+        max_images = max(db_sess.query(Image.id))[0]
+        print(max_images)
+        id_image = random.randint(0, int(max_images))
+        links.append(db_sess.query(Image.link)[id_image][0])
     return links
 
 
@@ -307,43 +338,29 @@ def main():
 
         fallbacks=[CommandHandler('stop_talk', start)]
     )
-    conv_handler = ConversationHandler(
-        entry_points=[CommandHandler('start', start)],
-        states={
-            'FIRST': [CallbackQueryHandler(scrolling_images)]
-        },
-        fallbacks=[CommandHandler('start', start)]
-    )
-    conv_handler_top_images = ConversationHandler(
+    # conv_handler = ConversationHandler(
+    #     entry_points=[CommandHandler('start', start)],
+    #     states={
+    #         'FIRST': [CallbackQueryHandler(scrolling_images)]
+    #     },
+    #     fallbacks=[CommandHandler('start', start)]
+    # )
+    conv_handler_images = ConversationHandler(
+        entry_points=[CommandHandler('images', images)],
 
-        entry_points=[CommandHandler('top_images', db_images)],
-
         states={
+            'purgat': [MessageHandler(filters.TEXT & ~filters.COMMAND, purgatory_images)],
+            'generate': [MessageHandler(filters.TEXT & ~filters.COMMAND, return_images)],
             'sorting': [MessageHandler(filters.TEXT & ~filters.COMMAND, images_sort_message)],
             'scrolling': [CallbackQueryHandler(scrolling_images)]
         },
-
         fallbacks=[CommandHandler('exit', start)]
     )
-
-    conv_generate_images = ConversationHandler(
-
-        entry_points=[CommandHandler('bot', generate_images)],
-
-        states={
-            'generate': [MessageHandler(filters.TEXT & ~filters.COMMAND, return_images)]
-
-        },
-
-        fallbacks=[CommandHandler('exit', start)]
-    )
-    application.add_handler(CommandHandler('images', images))
     application.add_handler(CommandHandler('start', start))
     application.add_handler(CommandHandler('stop', stop))
-    application.add_handler(conv_generate_images)
     application.add_handler(conv_handler_player)
     application.add_handler(conv_handler_talker)
-    application.add_handler(conv_handler_top_images)
+    application.add_handler(conv_handler_images)
     application.run_polling()
 
 

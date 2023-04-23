@@ -28,3 +28,4 @@ for i in range(1, 3):
 
 with open('../data/sam_bot.txt', encoding='utf-8') as cit_txt:
     cities_lst = cit_txt.read().lower().split()
+
