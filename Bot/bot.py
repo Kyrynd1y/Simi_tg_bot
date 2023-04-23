@@ -82,7 +82,10 @@ async def game_cities(update, context):
     elif message not in cities_lst:
         await update.message.reply_text('Я не знаю такого города!')
         return 'cities'
-    context.user_data[LAST_LETTER] = message[-1]
+    if message[-1] not in ['ь', 'ъ']:
+        context.user_data[LAST_LETTER] = message[-1]
+    else:
+        context.user_data[LAST_LETTER] = message[-2]
     cities_lst.remove(message)
     used_cities_list.append(message)
     chosen_city = random.choice(cities_lst)
@@ -90,7 +93,10 @@ async def game_cities(update, context):
         chosen_city = random.choice(cities_lst)
     used_cities_list.append(chosen_city)
     cities_lst.remove(chosen_city)
-    context.user_data[LAST_LETTER] = chosen_city[-1]
+    if chosen_city[-1] not in ['ь', 'ъ']:
+        context.user_data[LAST_LETTER] = chosen_city[-1]
+    else:
+        context.user_data[LAST_LETTER] = message[-2]
     chosen_city[0].upper()
     await update.message.reply_text(chosen_city.capitalize())
     return 'cities'

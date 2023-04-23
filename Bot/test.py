@@ -1,8 +1,5 @@
-print('x y z w')
-for x in (0, 1):
-    for y in (0, 1):
-        for z in (0, 1):
-            for w in (0, 1):
-                F = (((not x) <= y) and (y == (not z)) and (not w))
-                if (F):
-                    print(x, y, z, w)
+import requests
+
+img_data = requests.get('http://site.meishij.net/r/58/25/3568808/a3568808_142682562777944.jpg').content
+with open('../data/images/image_name.jpg', 'wb') as handler:
+    handler.write(img_data)
