@@ -15,10 +15,11 @@ from telegram.ext import Application, MessageHandler, filters, CommandHandler, C
 import data
 from db_session import *
 
-openai.api_key = "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"
+BOT_TOKEN = '6217430570:AAE2I1NZYFIUjzYFCXZtYyTHi31rSR79RDE'
+openai.api_key = "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"
 
 dotenv.load_dotenv()
-BOT_TOKEN = os.getenv('REPLICATE_API_TOKEN')
+REPLICATE_API_TOKEN = os.getenv('REPLICATE_API_TOKEN')
 
 cities_lst = []
 used_cities_list = []
@@ -142,7 +143,7 @@ async def return_images(update, context):
     await update.message.reply_text('Рисую картинку! Это не займет много времени')
     print(command)
     output = replicate.run(
-        "ai-forever/kandinsky-2:r8_1OWomDah0wmzZ1L2stFh6UZhuS4uYhP2i4ZZ5",
+        "ai-forever/kandinsky-2:601eea49d49003e6ea75a11527209c4f510a93e2112c969d548fbb45b9c4f19f",
         input={"prompt": f"{command}, 4k photo"}
     )
     img_data = requests.get(*output).content
