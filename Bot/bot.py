@@ -1,6 +1,7 @@
 import random
 import sqlite3
 import time
+from copy import copy
 
 import openai
 import requests
@@ -19,6 +20,7 @@ BOT_TOKEN = '6217430570:AAE2I1NZYFIUjzYFCXZtYyTHi31rSR79RDE'
 openai.api_key = "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"
 
 dotenv.load_dotenv()
+BOT_TOKEN = os.getenv('BOT_TOKEN')
 REPLICATE_API_TOKEN = os.getenv('REPLICATE_API_TOKEN')
 
 cities_lst = []
@@ -31,12 +33,13 @@ quit_markup = ReplyKeyboardMarkup([['/talk', '/play', '/images', '/stop']])
 talk_markup = ReplyKeyboardMarkup([['/stop_talk']])
 riddles_markup = ReplyKeyboardMarkup([['узнать ответ'] + part_of_game_markup])
 images_purgat_markup = ReplyKeyboardMarkup([['сгенерировать', 'топ картинок'] + exit])
-scrolling_images_markup = InlineKeyboardMarkup([[InlineKeyboardButton('👍', callback_data='like'),
-                                                 InlineKeyboardButton('download', callback_data='download'),
-                                                 InlineKeyboardButton('👎', callback_data='dislike')], [
-                                                    InlineKeyboardButton('◀', callback_data='back'),
-                                                    InlineKeyboardButton('...', callback_data='...'),
-                                                    InlineKeyboardButton('▶', callback_data='forward')]])
+scrolling_images_lst = [[InlineKeyboardButton('👍', callback_data='like'),
+                         InlineKeyboardButton('likes...', callback_data='like'),
+                         InlineKeyboardButton('👎', callback_data='dislike')], [
+                            InlineKeyboardButton('◀', callback_data='back'),
+                            InlineKeyboardButton('...', callback_data='...'),
+                            InlineKeyboardButton('▶', callback_data='forward')],
+                        [InlineKeyboardButton('download', callback_data='download')]]
 top_images_markup = ReplyKeyboardMarkup([["топ 2", "топ 3", "рандомно"] + exit])
 
 LAST_LETTER = 'last_letter'
@@ -197,30 +200,69 @@ async def images_sort_message(update: Update, context):
         context.user_data[IS_RANDOM] = False
         await update.message.reply_text('Я не знаю такую команду')
         return 'sorting'
+
+    scrolling_images_markup = InlineKeyboardMarkup(creating_scrolling_markup(context))
+
+    print(scrolling_images_lst)
+    print(scrolling_images_markup)
+
     await bot.send_photo(update.message.chat.id, photo=open(links[context.user_data[NUMBER_LINK]], 'rb'),
                          reply_markup=scrolling_images_markup)
     context.user_data[MESSAGE_ID] = update.inline_query
     return 'scrolling'
 
 
+def creating_scrolling_markup(context):
+    links = context.user_data[LINKS]
+    if context.user_data[IS_RANDOM]:
+        kb_lst = [[InlineKeyboardButton('👍', callback_data='like'),
+                   InlineKeyboardButton('likes...', callback_data='like'),
+                   InlineKeyboardButton('👎', callback_data='dislike')], [
+                      InlineKeyboardButton('◀', callback_data='back'),
+                      InlineKeyboardButton('▶', callback_data='forward')],
+                  [InlineKeyboardButton('download', callback_data='download')]]
+        kb_lst[0][1] = InlineKeyboardButton(
+            str(db_sess.query(Image.rating).filter(Image.link == str(links[context.user_data[NUMBER_LINK]]))[0][
+                    0]) + '❤',
+            callback_data='likes')
+    else:
+        kb_lst = [[InlineKeyboardButton('👍', callback_data='like'),
+                   InlineKeyboardButton('likes...', callback_data='like'),
+                   InlineKeyboardButton('👎', callback_data='dislike')], [
+                      InlineKeyboardButton('◀', callback_data='back'),
+                      InlineKeyboardButton('...', callback_data='...'),
+                      InlineKeyboardButton('▶', callback_data='forward')],
+                  [InlineKeyboardButton('download', callback_data='download')]]
+        kb_lst[1][1] = InlineKeyboardButton(context.user_data[NUMBER_LINK] + 1, callback_data='page')
+        kb_lst[0][1] = InlineKeyboardButton(
+            str(db_sess.query(Image.rating).filter(Image.link == str(links[context.user_data[NUMBER_LINK]]))[0][
+                    0]) + '❤',
+            callback_data='likes')
+    return kb_lst
+
+
 async def scrolling_images(update: Update, context):
     query = update.callback_query
     print('query', query)
+    recently = False
+
     if update.message:
         print('try go to purgat')
         return await purgatory_images(update, context)
     if query.data == 'like':
-        db_sess.query(Image).filter(Image.id == str(context.user_data[NUMBER_LINK] + 1)).first().rating += 1
+        db_sess.query(Image).filter(Image.link == str(context.user_data[LINKS][-1])).first().rating += 1
         db_sess.commit()
     elif query.data == 'dislike':
-        db_sess.query(Image).filter(Image.id == str(context.user_data[NUMBER_LINK] + 1)).first().rating -= 1
+        db_sess.query(Image).filter(Image.link == str(context.user_data[LINKS][-1])).first().rating -= 1
         db_sess.commit()
     elif query.data == 'back' and context.user_data[NUMBER_LINK] > 0:
         context.user_data[NUMBER_LINK] -= 1
     elif query.data == 'forward' and context.user_data[NUMBER_LINK] != context.user_data[MAX_COUNT_LINK]:
         context.user_data[NUMBER_LINK] += 1
+        recently = True
+
     if context.user_data[IS_RANDOM] and query.data == 'forward' and context.user_data[NUMBER_LINK] == context.user_data[
-            MAX_COUNT_LINK]:
+            MAX_COUNT_LINK] and not recently:
         max_images = max(db_sess.query(Image.id))[0]
         id_image = random.randint(0, int(max_images) - 1)
         print(db_sess.query(Image.link)[id_image])
@@ -230,24 +272,26 @@ async def scrolling_images(update: Update, context):
             link = db_sess.query(Image.link)[id_image][0]
         context.user_data[LINKS].append(link)
     elif query.data == 'back' and context.user_data[IS_RANDOM] and abs(context.user_data[NUMBER_LINK]) != len(
-            context.user_data[LINKS]) + 1:
+            context.user_data[LINKS]):
         context.user_data[NUMBER_LINK] -= 1
         link = context.user_data[LINKS][context.user_data[NUMBER_LINK]]
     else:
         link = context.user_data[LINKS][context.user_data[NUMBER_LINK]]
+
+    scrolling_images_markup = InlineKeyboardMarkup(creating_scrolling_markup(context))
+
     media = telegram.InputMediaPhoto(media=open(link, 'rb'))
+
     print(context.user_data[NUMBER_LINK])
     await query.message.edit_media(media=media, reply_markup=scrolling_images_markup)
 
 
 def get_links(command):
     links = []
-    db_sess.query(Image).order_by(Image.rating)
+    sorted_links = db_sess.query(Image.link).order_by(Image.rating.desc())
     if type(command) == int:
         for i in range(command):
-            links.append(db_sess.query(Image.link)[i][0])
-        db_sess.flush()
-        db_sess.commit()
+            links.append(sorted_links[i][0])
     if command == 'рандомно':
         max_images = max(db_sess.query(Image.id))[0]
         print(max_images)
