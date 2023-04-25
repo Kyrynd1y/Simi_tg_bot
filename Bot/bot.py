@@ -46,6 +46,9 @@ MAX_COUNT_LINK = 'MAX_COUNT_LINK'
 USER_ID = 'USER_ID'
 MESSAGE_ID = 'MESSAGE_ID'
 LINKS = 'LINKS'
+IS_RANDOM = 'IS_RANDOM'
+LST_RANDOM_IMAGES = 'LST_RANDOM_IMAGES'
+
 riddles_level = 1
 count_correct_answer = 0
 
@@ -156,7 +159,8 @@ async def return_images(update, context):
 
 async def purgatory_images(update, context):
     if update.message.text == 'топ картинок':
-        await update.message.reply_text('по какому принципу вы хотите получить изображения?', reply_markup=top_images_markup)
+        await update.message.reply_text('по какому принципу вы хотите получить изображения?',
+                                        reply_markup=top_images_markup)
         context.user_data[NUMBER_LINK] = 0
         return 'sorting'
     elif update.message.text == 'сгенерировать':
@@ -171,20 +175,25 @@ async def images_sort_message(update: Update, context):
     command = update.message.text
     print(command, 'топ' in command)
     if command == 'сгенерировать':
+        context.user_data[IS_RANDOM] = False
         await purgatory_images(update, context)
         return 'generate'
         # работает не правильно
     if 'топ' in command:
+        context.user_data[IS_RANDOM] = False
         count_top = int(command[command.find('топ') + 3:].strip())
         context.user_data[MAX_COUNT_LINK] = count_top - 1
         links = get_links(count_top)
         context.user_data[LINKS] = links
     elif command == 'рандомно':
-        context.user_data[MAX_COUNT_LINK] = 0
+        context.user_data[IS_RANDOM] = True
+        context.user_data[NUMBER_LINK] = -1
+        context.user_data[MAX_COUNT_LINK] = -1
         links = get_links(command)
         print('links', links)
         context.user_data[LINKS] = links
     else:
+        context.user_data[IS_RANDOM] = False
         await update.message.reply_text('Я не знаю такую команду')
         return 'sorting'
     await bot.send_photo(update.message.chat.id, photo=open(links[context.user_data[NUMBER_LINK]], 'rb'),
@@ -196,21 +205,37 @@ async def images_sort_message(update: Update, context):
 async def scrolling_images(update: Update, context):
     query = update.callback_query
     print('query', query)
-    if update.message.text == 'сгенерировать':
-        await purgatory_images(update, context)
-        return 'generate'
+    if update.message:
+        print('try go to purgat')
+        return await purgatory_images(update, context)
     if query.data == 'like':
         db_sess.query(Image).filter(Image.id == str(context.user_data[NUMBER_LINK] + 1)).first().rating += 1
         db_sess.commit()
     elif query.data == 'dislike':
         db_sess.query(Image).filter(Image.id == str(context.user_data[NUMBER_LINK] + 1)).first().rating -= 1
         db_sess.commit()
-    elif query.data == 'back' and context.user_data[NUMBER_LINK] != 0:
+    elif query.data == 'back' and context.user_data[NUMBER_LINK] > 0:
         context.user_data[NUMBER_LINK] -= 1
     elif query.data == 'forward' and context.user_data[NUMBER_LINK] != context.user_data[MAX_COUNT_LINK]:
         context.user_data[NUMBER_LINK] += 1
-    link = context.user_data[LINKS][context.user_data[NUMBER_LINK]]
+    if context.user_data[IS_RANDOM] and query.data == 'forward' and context.user_data[NUMBER_LINK] == context.user_data[
+            MAX_COUNT_LINK]:
+        max_images = max(db_sess.query(Image.id))[0]
+        id_image = random.randint(0, int(max_images) - 1)
+        print(db_sess.query(Image.link)[id_image])
+        link = db_sess.query(Image.link)[id_image][0]
+        while link == context.user_data[LINKS][-1]:
+            id_image = random.randint(0, int(max_images) - 1)
+            link = db_sess.query(Image.link)[id_image][0]
+        context.user_data[LINKS].append(link)
+    elif query.data == 'back' and context.user_data[IS_RANDOM] and abs(context.user_data[NUMBER_LINK]) != len(
+            context.user_data[LINKS]) + 1:
+        context.user_data[NUMBER_LINK] -= 1
+        link = context.user_data[LINKS][context.user_data[NUMBER_LINK]]
+    else:
+        link = context.user_data[LINKS][context.user_data[NUMBER_LINK]]
     media = telegram.InputMediaPhoto(media=open(link, 'rb'))
+    print(context.user_data[NUMBER_LINK])
     await query.message.edit_media(media=media, reply_markup=scrolling_images_markup)
 
 
@@ -225,7 +250,7 @@ def get_links(command):
     if command == 'рандомно':
         max_images = max(db_sess.query(Image.id))[0]
         print(max_images)
-        id_image = random.randint(0, int(max_images))
+        id_image = random.randint(0, int(max_images) - 1)
         links.append(db_sess.query(Image.link)[id_image][0])
     return links
 
