@@ -30,13 +30,15 @@ quit_markup = ReplyKeyboardMarkup([['/talk', '/play', '/images', '/stop']])
 talk_markup = ReplyKeyboardMarkup([['/stop_talk']])
 riddles_markup = ReplyKeyboardMarkup([['узнать ответ'] + part_of_game_markup])
 images_purgat_markup = ReplyKeyboardMarkup([['сгенерировать', 'топ картинок'] + exit])
-scrolling_images_markup = InlineKeyboardMarkup([[InlineKeyboardButton('👍', callback_data='like'),
-                                                 InlineKeyboardButton('download', callback_data='download'),
-                                                 InlineKeyboardButton('👎', callback_data='dislike')], [
-                                                    InlineKeyboardButton('◀', callback_data='back'),
-                                                    InlineKeyboardButton('...', callback_data='...'),
-                                                    InlineKeyboardButton('▶', callback_data='forward')]])
-top_images_markup = ReplyKeyboardMarkup([["топ 2", "топ 3", "рандомно"] + exit])
+scrolling_images_lst = [[InlineKeyboardButton('👍', callback_data='like'),
+                         InlineKeyboardButton('likes...', callback_data='like'),
+                         InlineKeyboardButton('👎', callback_data='dislike')], [
+                            InlineKeyboardButton('◀', callback_data='back'),
+                            InlineKeyboardButton('...', callback_data='...'),
+                            InlineKeyboardButton('▶', callback_data='forward')],
+                        [InlineKeyboardButton('download', callback_data='download')]]
+
+top_images_markup = ReplyKeyboardMarkup([["топ 3", "топ 5", "топ 10", "рандомно"] + exit])
 
 LAST_LETTER = 'last_letter'
 ANSWER = 'answer'
@@ -136,9 +138,6 @@ async def images(update, context):
 
 async def return_images(update, context):
     command = update.message.text
-    if command == 'топ картинок':
-        await purgatory_images(update, context)
-        return 'sorting'
     await update.message.reply_text('Рисую картинку! Это не займет много времени')
     print(command)
     output = replicate.run(
@@ -164,7 +163,9 @@ async def purgatory_images(update, context):
         context.user_data[NUMBER_LINK] = 0
         return 'sorting'
     elif update.message.text == 'сгенерировать':
-        await update.message.reply_text('Что хотите видеть на картинке? Введите точный запрос на английском языке')
+        await update.message.reply_text(
+            'Что хотите видеть на картинке? Введите точный запрос на английском или русском языках',
+            reply_markup=ReplyKeyboardMarkup([exit]))
         return 'generate'
     else:
         await update.message.reply_text('Я не знаю такую команду')
@@ -173,12 +174,6 @@ async def purgatory_images(update, context):
 
 async def images_sort_message(update: Update, context):
     command = update.message.text
-    print(command, 'топ' in command)
-    if command == 'сгенерировать':
-        context.user_data[IS_RANDOM] = False
-        await purgatory_images(update, context)
-        return 'generate'
-        # работает не правильно
     if 'топ' in command:
         context.user_data[IS_RANDOM] = False
         count_top = int(command[command.find('топ') + 3:].strip())
@@ -196,30 +191,59 @@ async def images_sort_message(update: Update, context):
         context.user_data[IS_RANDOM] = False
         await update.message.reply_text('Я не знаю такую команду')
         return 'sorting'
+
+    scrolling_images_markup = InlineKeyboardMarkup(creating_scrolling_markup(context))
+
+    print(scrolling_images_lst)
+    print(scrolling_images_markup)
+
     await bot.send_photo(update.message.chat.id, photo=open(links[context.user_data[NUMBER_LINK]], 'rb'),
                          reply_markup=scrolling_images_markup)
     context.user_data[MESSAGE_ID] = update.inline_query
     return 'scrolling'
 
 
+def creating_scrolling_markup(context):
+    links = context.user_data[LINKS]
+    kb_lst = [[InlineKeyboardButton('👍', callback_data='like'),
+               InlineKeyboardButton('likes...', callback_data='like'),
+               InlineKeyboardButton('👎', callback_data='dislike')], [
+                  InlineKeyboardButton('◀', callback_data='back'),
+                  InlineKeyboardButton('...', callback_data='...'),
+                  InlineKeyboardButton('▶', callback_data='forward')],
+              [InlineKeyboardButton('name', callback_data='name')]]
+    if context.user_data[IS_RANDOM]:
+        del kb_lst[1][1]
+    else:
+        kb_lst[1][1] = InlineKeyboardButton(context.user_data[NUMBER_LINK] + 1, callback_data='page')
+    kb_lst[2][0] = InlineKeyboardButton(
+        str(db_sess.query(Image.key_word).filter(Image.link == str(links[context.user_data[NUMBER_LINK]]))[0][
+                0]).capitalize(), callback_data='name')
+    kb_lst[0][1] = InlineKeyboardButton(
+        str(db_sess.query(Image.rating).filter(Image.link == str(links[context.user_data[NUMBER_LINK]]))[0][
+                0]) + '❤',
+        callback_data='likes')
+    return kb_lst
+
+
 async def scrolling_images(update: Update, context):
     query = update.callback_query
     print('query', query)
-    if update.message:
-        print('try go to purgat')
-        return await purgatory_images(update, context)
+    recently = False
     if query.data == 'like':
-        db_sess.query(Image).filter(Image.id == str(context.user_data[NUMBER_LINK] + 1)).first().rating += 1
+        db_sess.query(Image).filter(Image.link == str(context.user_data[LINKS][-1])).first().rating += 1
         db_sess.commit()
     elif query.data == 'dislike':
-        db_sess.query(Image).filter(Image.id == str(context.user_data[NUMBER_LINK] + 1)).first().rating -= 1
+        db_sess.query(Image).filter(Image.link == str(context.user_data[LINKS][-1])).first().rating -= 1
         db_sess.commit()
     elif query.data == 'back' and context.user_data[NUMBER_LINK] > 0:
         context.user_data[NUMBER_LINK] -= 1
     elif query.data == 'forward' and context.user_data[NUMBER_LINK] != context.user_data[MAX_COUNT_LINK]:
         context.user_data[NUMBER_LINK] += 1
+        recently = True
+
     if context.user_data[IS_RANDOM] and query.data == 'forward' and context.user_data[NUMBER_LINK] == context.user_data[
-        MAX_COUNT_LINK]:
+        MAX_COUNT_LINK] and not recently:
         max_images = max(db_sess.query(Image.id))[0]
         id_image = random.randint(0, int(max_images) - 1)
         print(db_sess.query(Image.link)[id_image])
@@ -229,24 +253,26 @@ async def scrolling_images(update: Update, context):
             link = db_sess.query(Image.link)[id_image][0]
         context.user_data[LINKS].append(link)
     elif query.data == 'back' and context.user_data[IS_RANDOM] and abs(context.user_data[NUMBER_LINK]) != len(
-            context.user_data[LINKS]) + 1:
+            context.user_data[LINKS]):
         context.user_data[NUMBER_LINK] -= 1
         link = context.user_data[LINKS][context.user_data[NUMBER_LINK]]
     else:
         link = context.user_data[LINKS][context.user_data[NUMBER_LINK]]
+
+    scrolling_images_markup = InlineKeyboardMarkup(creating_scrolling_markup(context))
+
     media = telegram.InputMediaPhoto(media=open(link, 'rb'))
+
     print(context.user_data[NUMBER_LINK])
     await query.message.edit_media(media=media, reply_markup=scrolling_images_markup)
 
 
 def get_links(command):
     links = []
-    db_sess.query(Image).order_by(Image.rating)
+    sorted_links = db_sess.query(Image.link).order_by(Image.rating.desc())
     if type(command) == int:
         for i in range(command):
-            links.append(db_sess.query(Image.link)[i][0])
-        db_sess.flush()
-        db_sess.commit()
+            links.append(sorted_links[i][0])
     if command == 'рандомно':
         max_images = max(db_sess.query(Image.id))[0]
         print(max_images)
@@ -286,7 +312,6 @@ async def riddles_func(update, context):
 async def purgatory(update, context):
     global cities_lst
     command = update.message.text.lower()
-    print(command)
     if command == 'сыграем в города':
         await update.message.reply_text(data.cities_rules,
                                         reply_markup=ReplyKeyboardMarkup([part_of_game_markup]))
@@ -322,7 +347,6 @@ async def purgatory(update, context):
 
 
 async def stop(update, context):
-    print('stop')
     await update.message.reply_text("До встречи в чате!", reply_markup=ReplyKeyboardMarkup([['/start']]))
 
 
@@ -369,13 +393,6 @@ def main():
 
         fallbacks=[CommandHandler('stop_talk', start)]
     )
-    # conv_handler = ConversationHandler(
-    #     entry_points=[CommandHandler('start', start)],
-    #     states={
-    #         'FIRST': [CallbackQueryHandler(scrolling_images)]
-    #     },
-    #     fallbacks=[CommandHandler('start', start)]
-    # )
     conv_handler_images = ConversationHandler(
         entry_points=[CommandHandler('images', images)],
 
@@ -397,4 +414,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-#
