@@ -164,7 +164,7 @@ async def purgatory_images(update, context):
         return 'sorting'
     elif update.message.text == 'сгенерировать':
         await update.message.reply_text(
-            'Что хотите видеть на картинке? Введите точный запрос на английском или русском языках',
+            'Что хотите видеть на картинке? Введите точный запрос на английском языке',
             reply_markup=ReplyKeyboardMarkup([exit]))
         return 'generate'
     else:
