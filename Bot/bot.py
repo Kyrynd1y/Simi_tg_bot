@@ -15,11 +15,10 @@ from telegram.ext import Application, MessageHandler, filters, CommandHandler, C
 import data
 from db_session import *
 
-BOT_TOKEN = '6217430570:AAE2I1NZYFIUjzYFCXZtYyTHi31rSR79RDE'
-openai.api_key = "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"
-
 dotenv.load_dotenv()
 REPLICATE_API_TOKEN = os.getenv('REPLICATE_API_TOKEN')
+BOT_TOKEN = os.getenv('BOT_TOKEN')
+openai.api_key = os.getenv('OPENAI_API_KEY')
 
 cities_lst = []
 used_cities_list = []
@@ -131,7 +130,7 @@ async def tsuefa(update, context):
 
 
 async def images(update, context):
-    await update.message.reply_text('откуда вы хотите получить изображение?', reply_markup=images_purgat_markup)
+    await update.message.reply_text('Откуда вы хотите получить изображение?', reply_markup=images_purgat_markup)
     return 'purgat'
 
 
@@ -160,7 +159,7 @@ async def return_images(update, context):
 
 async def purgatory_images(update, context):
     if update.message.text == 'топ картинок':
-        await update.message.reply_text('по какому принципу вы хотите получить изображения?',
+        await update.message.reply_text('По какому принципу вы хотите получить изображения?',
                                         reply_markup=top_images_markup)
         context.user_data[NUMBER_LINK] = 0
         return 'sorting'
@@ -220,7 +219,7 @@ async def scrolling_images(update: Update, context):
     elif query.data == 'forward' and context.user_data[NUMBER_LINK] != context.user_data[MAX_COUNT_LINK]:
         context.user_data[NUMBER_LINK] += 1
     if context.user_data[IS_RANDOM] and query.data == 'forward' and context.user_data[NUMBER_LINK] == context.user_data[
-            MAX_COUNT_LINK]:
+        MAX_COUNT_LINK]:
         max_images = max(db_sess.query(Image.id))[0]
         id_image = random.randint(0, int(max_images) - 1)
         print(db_sess.query(Image.link)[id_image])
@@ -328,17 +327,17 @@ async def stop(update, context):
 
 
 async def start_games(update, context):
-    await update.message.reply_text('в какую игру сыграем?', reply_markup=games_markup)
+    await update.message.reply_text('Давай поиграем! Выбери игру, в которую хочешь сыграть.', reply_markup=games_markup)
     return 'purgatory'
 
 
 async def talking(update, context):
-    await update.message.reply_text('давай поговорим)', reply_markup=talk_markup)
+    await update.message.reply_text('С радостью пообщаюсь с тобой!', reply_markup=talk_markup)
     return 'continue'
 
 
 async def start(update, context):
-    await update.message.reply_text('чем займемся?', reply_markup=quit_markup)
+    await update.message.reply_text('Привет! Чем займемся сегодня?', reply_markup=quit_markup)
     context.user_data[USER_ID] = update.message.chat_id
     return ConversationHandler.END
 
