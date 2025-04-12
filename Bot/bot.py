@@ -1,6 +1,7 @@
 import random
 import sqlite3
 import time
+from datetime import datetime
 
 import openai
 import requests
@@ -14,6 +15,10 @@ from telegram import ReplyKeyboardMarkup, Update, InlineKeyboardMarkup, InlineKe
 from telegram.ext import Application, MessageHandler, filters, CommandHandler, ConversationHandler, CallbackQueryHandler
 import data
 from db_session import *
+
+from freesdxl import *
+from g4f.client import Client
+from pathlib import Path
 
 dotenv.load_dotenv()
 REPLICATE_API_TOKEN = os.getenv('REPLICATE_API_TOKEN')
@@ -139,19 +144,42 @@ async def images(update, context):
 async def return_images(update, context):
     command = update.message.text
     await update.message.reply_text('Рисую картинку! Это не займет много времени')
+
+    config = SDXLConfig(auto_translate=True)
+    client = SDXLClient(config)
+
+    try:
+        images = await client.generate(
+            prompt=command,
+            negative_prompt="блюр",
+            cfg_scale=10,
+            style=SDXLStyle.CINEMATIC,
+        )
+
+        # Can replace for your own function
+
+        link = f'../data/images/{"_".join(command.split())}.jpg'
+        i = 0
+        while os.path.exists(link):
+            i += 1
+            link = f'../data/images/{"_".join(command.split())}_{i}.jpg'
+
+        base64_data = images[1].split(",")[1]
+        image_bytes = base64.b64decode(base64_data)
+        image = Image(key_word=f'{command.split()[0]}', link=link, rating=0)
+        db_sess.add(image)
+        db_sess.commit()
+
+
+        with open(link, 'wb') as file:
+            file.write(image_bytes)
+
+    except SDXLException as e:
+        print(f"Error generating images: {e}")
+
+
     print(command)
-    output = replicate.run(
-        "ai-forever/kandinsky-2:601eea49d49003e6ea75a11527209c4f510a93e2112c969d548fbb45b9c4f19f",
-        input={"prompt": f"{command}, 4k photo"}
-    )
-    img_data = requests.get(*output).content
-    link = f'../data/images/{"_".join(command.split())}.jpg'
-    image = Image(key_word=f'{command.split()[0]}', link=link, rating=0)
-    db_sess.add(image)
-    db_sess.commit()
-    with open(link, 'wb') as handler:
-        handler.write(img_data)
-    await bot.send_photo(update.message.chat.id, photo=img_data)
+    await bot.send_photo(update.message.chat.id, photo=image_bytes)
     await update.message.reply_text('Готово! Нарисовать еще что-нибудь?')
     return 'generate'
 
